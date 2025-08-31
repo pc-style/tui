@@ -1,4 +1,4 @@
-module github.com/charmbracelet/bubbletea-app-template
+module github.com/pc-style/tui
 
 go 1.23.0
 
