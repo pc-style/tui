@@ -1,0 +1,32 @@
+[
+  {
+    "content": "Create and checkout new branch 'feature/mutlitui-20250831'",
+    "status": "completed",
+    "id": "1"
+  },
+  {
+    "content": "Add all changes with git add .",
+    "status": "completed",
+    "id": "2"
+  },
+  {
+    "content": "Create descriptive commit message",
+    "status": "completed",
+    "id": "3"
+  },
+  {
+    "content": "Commit the changes",
+    "status": "completed",
+    "id": "4"
+  },
+  {
+    "content": "Push new branch to remote",
+    "status": "completed",
+    "id": "5"
+  },
+  {
+    "content": "Suggest next steps",
+    "status": "completed",
+    "id": "6"
+  }
+]

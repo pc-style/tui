@@ -1,0 +1,67 @@
+[
+  {
+    "content": "Phase 1: Research & Planning - Analyze MCF TUI requirements and architecture",
+    "status": "completed",
+    "id": "1"
+  },
+  {
+    "content": "Phase 2: Development Implementation - Build modular architecture",
+    "status": "completed",
+    "id": "2"
+  },
+  {
+    "content": "Phase 3: Testing & Quality Assurance",
+    "status": "completed",
+    "id": "3"
+  },
+  {
+    "content": "Phase 4: Polish & Performance Optimization",
+    "status": "completed",
+    "id": "4"
+  },
+  {
+    "content": "Create modular project structure with proper Go packages",
+    "status": "completed",
+    "id": "5"
+  },
+  {
+    "content": "Implement MCF integration layer for component communication",
+    "status": "completed",
+    "id": "6"
+  },
+  {
+    "content": "Complete command bar functionality and command processing",
+    "status": "completed",
+    "id": "10"
+  },
+  {
+    "content": "Add keyboard navigation and scrolling for logs view",
+    "status": "completed",
+    "id": "11"
+  },
+  {
+    "content": "Implement real MCF client integration with HTTP calls",
+    "status": "completed",
+    "id": "12"
+  },
+  {
+    "content": "Add comprehensive error handling and validation",
+    "status": "completed",
+    "id": "13"
+  },
+  {
+    "content": "Run quality checks (formatting, linting, testing)",
+    "status": "completed",
+    "id": "14"
+  },
+  {
+    "content": "Install gopls for proper Go semantic analysis",
+    "status": "pending",
+    "id": "15"
+  },
+  {
+    "content": "Create production-ready build with optimized binary",
+    "status": "completed",
+    "id": "16"
+  }
+]

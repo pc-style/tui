@@ -1,0 +1,17 @@
+[
+  {
+    "content": "Initialize and activate MCF project for Serena semantic analysis",
+    "status": "completed",
+    "id": "1"
+  },
+  {
+    "content": "Verify semantic tools are working with the codebase",
+    "status": "completed",
+    "id": "2"
+  },
+  {
+    "content": "Test project understanding and symbol discovery",
+    "status": "completed",
+    "id": "3"
+  }
+]

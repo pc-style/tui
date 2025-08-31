@@ -1,0 +1,22 @@
+[
+  {
+    "content": "Fix timeline integration with main application",
+    "status": "completed",
+    "id": "1"
+  },
+  {
+    "content": "Implement proper focus management between components",
+    "status": "completed",
+    "id": "2"
+  },
+  {
+    "content": "Add commit caching for performance",
+    "status": "completed",
+    "id": "3"
+  },
+  {
+    "content": "Test all interactions work correctly",
+    "status": "completed",
+    "id": "4"
+  }
+]

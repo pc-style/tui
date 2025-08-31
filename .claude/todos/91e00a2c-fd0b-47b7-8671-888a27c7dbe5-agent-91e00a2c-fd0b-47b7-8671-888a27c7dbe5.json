@@ -1,0 +1,22 @@
+[
+  {
+    "content": "Fix all agent tool definitions to use correct Gemini MCP tools",
+    "status": "completed",
+    "id": "1"
+  },
+  {
+    "content": "Fix all command tool definitions to use correct Gemini MCP tools",
+    "status": "completed",
+    "id": "2"
+  },
+  {
+    "content": "Update instructions to reflect actual Gemini capabilities",
+    "status": "completed",
+    "id": "3"
+  },
+  {
+    "content": "Commit and push the corrected changes",
+    "status": "completed",
+    "id": "4"
+  }
+]
