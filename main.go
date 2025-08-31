@@ -20,76 +20,21 @@ import (
 
 type errMsg error
 
-type tickMsg time.Time
-
 type processData struct {
-	processes    []Process
-	systemStats  SystemStats
-	lastUpdate   time.Time
-}
-
-type Process struct {
-	PID         int
-	Name        string
-	User        string
-	CPU         float64
-	Memory      float64
-	State       string
-	PPID        int
-	StartTime   string
-	Command     string
-}
-
-type SystemStats struct {
-	CPUCores    int
-	CPUUsage    []float64
-	MemTotal    uint64
-	MemUsed     uint64
-	SwapTotal   uint64
-	SwapUsed    uint64
-	LoadAvg     [3]float64
-	Uptime      time.Duration
-}
-
-type NetworkConnection struct {
-	Protocol string
-	LocalAddr string
-	LocalPort string
-	RemoteAddr string
-	RemotePort string
-	State string
-	PID int
-	ProcessName string
-}
-
-type NetworkInterface struct {
-	Name string
-	BytesIn uint64
-	BytesOut uint64
-	PacketsIn uint64
-	PacketsOut uint64
-	Speed uint64
-}
-
-type SystemAlert struct {
-	Type string
-	Level string // INFO, WARN, ERROR, CRITICAL
-	Message string
-	Timestamp time.Time
-	Source string
+	processes   []Process
+	systemStats SystemStats
+	lastUpdate  time.Time
 }
 
 type model struct {
-	width       int
-	height      int
-	frame       int
-	quitting    bool
-	err         error
-	
-	// Current view mode
-	viewMode    string // "processes", "network", "alerts", "overview"
-	
-	// Process management
+	width    int
+	height   int
+	frame    int
+	quitting bool
+	err      error
+
+	viewMode string
+
 	processes     []Process
 	systemStats   SystemStats
 	selectedRow   int
@@ -99,123 +44,152 @@ type model struct {
 	searchQuery   string
 	filteredProcs []Process
 	scrollOffset  int
-	
-	// Network monitoring
-	connections []NetworkConnection
-	interfaces []NetworkInterface
-	networkTraffic []float64 // Recent traffic history
-	bandwidthIn []float64
-	bandwidthOut []float64
-	
-	// System alerts
-	alerts []SystemAlert
+
+	connections    []NetworkConnection
+	interfaces     []NetworkInterface
+	networkTraffic []float64
+	bandwidthIn    []float64
+	bandwidthOut   []float64
+
+	alerts            []SystemAlert
 	alertScrollOffset int
-	
-	// UI state
+
 	showKillDialog bool
 	killPID        int
-	selectedPanel  int // 0=left, 1=center, 2=right
-	
-	// Visual effects
-	particles     []particle
+	selectedPanel  int
+
+	// Enhanced visual effects
+	orbs          []orb
+	lightRays     []lightRay
+	matrixRain    []matrixDrop
+	energyField   []energyNode
 	cpuHistory    [][]float64
 	memHistory    []float64
-	networkWaves  []networkWave
+	glowIntensity float64
+	pulsePhase    float64
 }
 
-type particle struct {
-	x, y   float64
-	vx, vy float64
-	char   rune
-	color  string
-}
-
-type networkWave struct {
-	x, y   float64
-	amplitude float64
-	frequency float64
-	phase float64
-	color string
-}
-
+// Elegant color palette
 var (
-	neonCyan    = lipgloss.Color("#00FFFF")
-	neonMagenta = lipgloss.Color("#FF00FF") 
-	neonGreen   = lipgloss.Color("#00FF00")
-	neonYellow  = lipgloss.Color("#FFFF00")
-	neonRed     = lipgloss.Color("#FF0066")
-	darkBg      = lipgloss.Color("#0D0D0D")
+	// Primary colors - more subtle and elegant
+	primary   = lipgloss.Color("#6366f1") // Indigo
+	secondary = lipgloss.Color("#8b5cf6") // Violet
+	accent    = lipgloss.Color("#06b6d4") // Cyan
+	success   = lipgloss.Color("#10b981") // Emerald
+	warning   = lipgloss.Color("#f59e0b") // Amber
+	danger    = lipgloss.Color("#ef4444") // Red
+
+	// Background and text
+	bg        = lipgloss.Color("#0f0f23") // Deep space blue
+	bgLight   = lipgloss.Color("#1e1e3f") // Lighter background
+	text      = lipgloss.Color("#e2e8f0") // Light gray
+	textMuted = lipgloss.Color("#94a3b8") // Muted gray
+	textFaint = lipgloss.Color("#64748b") // Faint gray
+
+	// Special effects
+	glow  = lipgloss.Color("#3b82f6") // Blue glow
+	pulse = lipgloss.Color("#ec4899") // Pink pulse
 )
 
 var (
-	quitKeys = key.NewBinding(
-		key.WithKeys("q", "ctrl+c"),
-		key.WithHelp("", "press q to quit"),
-	)
-	
-	killKeys = key.NewBinding(
-		key.WithKeys("k"),
-		key.WithHelp("", "kill process"),
-	)
-	
-	searchKeys = key.NewBinding(
-		key.WithKeys("/"),
-		key.WithHelp("", "search"),
-	)
-	
-	tabKeys = key.NewBinding(
-		key.WithKeys("tab"),
-		key.WithHelp("", "switch view"),
-	)
+	quitKeys   = key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("", "quit"))
+	killKeys   = key.NewBinding(key.WithKeys("k"), key.WithHelp("", "kill process"))
+	searchKeys = key.NewBinding(key.WithKeys("/"), key.WithHelp("", "search"))
+	tabKeys    = key.NewBinding(key.WithKeys("tab"), key.WithHelp("", "switch view"))
 )
 
 func initialModel() model {
 	numCores := runtime.NumCPU()
 	m := model{
-		viewMode:     "overview", // Start with overview
-		particles:    make([]particle, 20),
-		networkWaves: make([]networkWave, 10),
-		cpuHistory:   make([][]float64, numCores),
-		memHistory:   make([]float64, 50),
-		bandwidthIn:  make([]float64, 50),
-		bandwidthOut: make([]float64, 50),
-		networkTraffic: make([]float64, 50),
-		sortColumn:   "CPU",
-		sortReverse:  true,
-		selectedRow:  0,
-		scrollOffset: 0,
-		selectedPanel: 0,
+		viewMode:       "overview",
+		orbs:           make([]orb, 8),
+		lightRays:      make([]lightRay, 12),
+		matrixRain:     make([]matrixDrop, 20),
+		energyField:    make([]energyNode, 15),
+		cpuHistory:     make([][]float64, numCores),
+		memHistory:     make([]float64, 60),
+		bandwidthIn:    make([]float64, 60),
+		bandwidthOut:   make([]float64, 60),
+		networkTraffic: make([]float64, 60),
+		sortColumn:     "CPU",
+		sortReverse:    true,
+		selectedRow:    0,
+		scrollOffset:   0,
+		selectedPanel:  0,
+		glowIntensity:  0.5,
+		pulsePhase:     0,
 	}
-	
-	// Initialize CPU history for each core
+
+	// Initialize CPU history
 	for i := range m.cpuHistory {
-		m.cpuHistory[i] = make([]float64, 50)
+		m.cpuHistory[i] = make([]float64, 60)
 	}
-	
-	// Initialize floating particles
-	for i := range m.particles {
-		m.particles[i] = particle{
-			x:     rand.Float64() * 100,
-			y:     rand.Float64() * 30,
-			vx:    (rand.Float64() - 0.5) * 0.3,
-			vy:    (rand.Float64() - 0.5) * 0.2,
-			char:  []rune("•◦◊◦•○●◎◉▲▼►◄")[rand.Intn(12)],
-			color: []string{string(neonCyan), string(neonMagenta), string(neonGreen), string(neonYellow)}[rand.Intn(4)],
+
+	// Initialize elegant floating orbs
+	colors := []lipgloss.Color{primary, secondary, accent, success, warning}
+	for i := range m.orbs {
+		m.orbs[i] = orb{
+			x:           rand.Float64() * 120,
+			y:           rand.Float64() * 40,
+			vx:          (rand.Float64() - 0.5) * 0.2,
+			vy:          (rand.Float64() - 0.5) * 0.15,
+			radius:      rand.Float64()*2 + 1,
+			intensity:   rand.Float64()*0.8 + 0.2,
+			color:       colors[rand.Intn(len(colors))],
+			pulsePeriod: rand.Float64()*4 + 2,
+			pulseOffset: rand.Float64() * 6.28,
 		}
 	}
-	
-	// Initialize network waves
-	for i := range m.networkWaves {
-		m.networkWaves[i] = networkWave{
-			x:         rand.Float64() * 100,
-			y:         rand.Float64() * 30,
-			amplitude: rand.Float64() * 3 + 1,
-			frequency: rand.Float64() * 0.5 + 0.1,
-			phase:     rand.Float64() * 6.28, // 2π
-			color:     []string{string(neonCyan), string(neonMagenta), string(neonGreen)}[rand.Intn(3)],
+
+	// Initialize light rays
+	for i := range m.lightRays {
+		m.lightRays[i] = lightRay{
+			x:         rand.Float64() * 120,
+			y:         rand.Float64() * 40,
+			angle:     rand.Float64() * 6.28,
+			length:    rand.Float64()*15 + 5,
+			intensity: rand.Float64()*0.6 + 0.1,
+			color:     colors[rand.Intn(len(colors))],
 		}
 	}
-	
+
+	// Initialize matrix rain
+	chars := []rune("ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍ0123456789")
+	for i := range m.matrixRain {
+		m.matrixRain[i] = matrixDrop{
+			x:         float64(rand.Intn(120)),
+			y:         rand.Float64() * 40,
+			speed:     rand.Float64()*0.3 + 0.1,
+			length:    rand.Intn(8) + 3,
+			chars:     make([]rune, rand.Intn(8)+3),
+			intensity: rand.Float64()*0.7 + 0.3,
+		}
+		for j := range m.matrixRain[i].chars {
+			m.matrixRain[i].chars[j] = chars[rand.Intn(len(chars))]
+		}
+	}
+
+	// Initialize energy field
+	for i := range m.energyField {
+		connections := make([]int, 0)
+		// Connect to 1-3 random other nodes
+		numConnections := rand.Intn(3) + 1
+		for j := 0; j < numConnections; j++ {
+			target := rand.Intn(len(m.energyField))
+			if target != i {
+				connections = append(connections, target)
+			}
+		}
+
+		m.energyField[i] = energyNode{
+			x:           rand.Float64() * 120,
+			y:           rand.Float64() * 40,
+			connections: connections,
+			pulsePhase:  rand.Float64() * 6.28,
+			energy:      rand.Float64()*0.8 + 0.2,
+		}
+	}
+
 	return m
 }
 
@@ -230,7 +204,7 @@ func (m model) Init() tea.Cmd {
 }
 
 func tick() tea.Cmd {
-	return tea.Tick(time.Millisecond*80, func(t time.Time) tea.Msg {
+	return tea.Tick(time.Millisecond*50, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
@@ -248,12 +222,12 @@ func fetchProcesses() tea.Cmd {
 
 type networkData struct {
 	connections []NetworkConnection
-	interfaces []NetworkInterface
-	lastUpdate time.Time
+	interfaces  []NetworkInterface
+	lastUpdate  time.Time
 }
 
 type alertData struct {
-	alerts []SystemAlert
+	alerts     []SystemAlert
 	lastUpdate time.Time
 }
 
@@ -263,8 +237,8 @@ func fetchNetworkData() tea.Cmd {
 		interfaces := getNetworkInterfaces()
 		return networkData{
 			connections: connections,
-			interfaces: interfaces,
-			lastUpdate: time.Now(),
+			interfaces:  interfaces,
+			lastUpdate:  time.Now(),
 		}
 	}
 }
@@ -273,7 +247,7 @@ func fetchSystemAlerts() tea.Cmd {
 	return func() tea.Msg {
 		alerts := getSystemAlerts()
 		return alertData{
-			alerts: alerts,
+			alerts:     alerts,
 			lastUpdate: time.Now(),
 		}
 	}
@@ -285,7 +259,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		return m, nil
-		
+
 	case tea.KeyMsg:
 		if m.showKillDialog {
 			switch msg.String() {
@@ -299,7 +273,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		
+
 		if m.searchMode {
 			switch msg.String() {
 			case "esc":
@@ -324,14 +298,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-		
+
 		switch {
 		case key.Matches(msg, quitKeys):
 			m.quitting = true
 			return m, tea.Quit
-			
+
 		case key.Matches(msg, tabKeys):
-			// Cycle through view modes
 			modes := []string{"overview", "processes", "network", "alerts"}
 			currentIndex := 0
 			for i, mode := range modes {
@@ -344,7 +317,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.selectedRow = 0
 			m.scrollOffset = 0
 			return m, nil
-			
+
 		case msg.String() == "1":
 			m.viewMode = "overview"
 			return m, nil
@@ -357,21 +330,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case msg.String() == "4":
 			m.viewMode = "alerts"
 			return m, nil
-			
+
 		case key.Matches(msg, killKeys):
 			if m.viewMode == "processes" && len(m.filteredProcs) > 0 && m.selectedRow < len(m.filteredProcs) {
 				m.killPID = m.filteredProcs[m.selectedRow].PID
 				m.showKillDialog = true
 			}
 			return m, nil
-			
+
 		case key.Matches(msg, searchKeys):
 			if m.viewMode == "processes" {
 				m.searchMode = true
 				m.searchQuery = ""
 			}
 			return m, nil
-			
+
 		case msg.String() == "up", msg.String() == "k":
 			if m.selectedRow > 0 {
 				m.selectedRow--
@@ -380,7 +353,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
-			
+
 		case msg.String() == "down", msg.String() == "j":
 			maxItems := 0
 			switch m.viewMode {
@@ -391,30 +364,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "alerts":
 				maxItems = len(m.alerts)
 			}
-			
+
 			if m.selectedRow < maxItems-1 {
 				m.selectedRow++
-				visibleRows := m.height - 12
+				visibleRows := m.height - 15
 				if m.selectedRow >= m.scrollOffset+visibleRows {
 					m.scrollOffset = m.selectedRow - visibleRows + 1
 				}
 			}
 			return m, nil
-			
+
 		case msg.String() == "c":
 			if m.viewMode == "processes" {
 				m.sortColumn = "CPU"
 				m.sortProcesses()
 			}
 			return m, nil
-			
+
 		case msg.String() == "m":
 			if m.viewMode == "processes" {
 				m.sortColumn = "Memory"
 				m.sortProcesses()
 			}
 			return m, nil
-			
+
 		case msg.String() == "p":
 			if m.viewMode == "processes" {
 				m.sortColumn = "PID"
@@ -422,671 +395,888 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		
+
 		return m, nil
-		
+
 	case tickMsg:
 		m.frame++
-		
-		// Update particles
-		for i := range m.particles {
-			p := &m.particles[i]
-			p.x += p.vx
-			p.y += p.vy
-			
-			if p.x < 0 || p.x > 100 {
-				p.vx *= -1
+		m.pulsePhase += 0.05
+		m.glowIntensity = 0.3 + 0.2*math.Sin(m.pulsePhase)
+
+		// Update elegant orbs
+		for i := range m.orbs {
+			orb := &m.orbs[i]
+			orb.x += orb.vx
+			orb.y += orb.vy
+
+			// Gentle bouncing with smooth curves
+			if orb.x <= 0 || orb.x >= 120 {
+				orb.vx *= -0.8
+				orb.x = math.Max(0, math.Min(120, orb.x))
 			}
-			if p.y < 0 || p.y > 30 {
-				p.vy *= -1
+			if orb.y <= 0 || orb.y >= 40 {
+				orb.vy *= -0.8
+				orb.y = math.Max(0, math.Min(40, orb.y))
+			}
+
+			// Update pulse
+			orb.intensity = 0.3 + 0.5*math.Sin(float64(m.frame)*0.02*orb.pulsePeriod+orb.pulseOffset)
+		}
+
+		// Update light rays
+		for i := range m.lightRays {
+			ray := &m.lightRays[i]
+			ray.angle += 0.01
+			ray.intensity = 0.2 + 0.4*math.Sin(float64(m.frame)*0.03+float64(i))
+		}
+
+		// Update matrix rain
+		for i := range m.matrixRain {
+			drop := &m.matrixRain[i]
+			drop.y += drop.speed
+			if drop.y > 40 {
+				drop.y = -float64(drop.length)
+				drop.x = float64(rand.Intn(120))
 			}
 		}
-		
-		// Update network waves
-		for i := range m.networkWaves {
-			w := &m.networkWaves[i]
-			w.phase += 0.1
-			w.x += 0.5
-			if w.x > 100 {
-				w.x = 0
-			}
+
+		// Update energy field
+		for i := range m.energyField {
+			node := &m.energyField[i]
+			node.pulsePhase += 0.02
+			node.energy = 0.4 + 0.4*math.Sin(node.pulsePhase)
 		}
-		
+
 		// Fetch new data periodically
 		var cmds []tea.Cmd
-		if m.frame%25 == 0 { // ~2 seconds
+		if m.frame%40 == 0 { // 2 seconds
 			cmds = append(cmds, fetchProcesses())
 		}
-		if m.frame%30 == 0 { // ~2.4 seconds  
+		if m.frame%50 == 0 { // 2.5 seconds
 			cmds = append(cmds, fetchNetworkData())
 		}
-		if m.frame%50 == 0 { // ~4 seconds
+		if m.frame%80 == 0 { // 4 seconds
 			cmds = append(cmds, fetchSystemAlerts())
 		}
-		
+
 		cmds = append(cmds, tick())
 		return m, tea.Batch(cmds...)
-		
+
 	case processData:
 		m.processes = msg.processes
 		m.systemStats = msg.systemStats
-		
-		// Update CPU history
+
+		// Update histories smoothly
 		for i, usage := range msg.systemStats.CPUUsage {
 			if i < len(m.cpuHistory) {
 				m.cpuHistory[i] = append(m.cpuHistory[i][1:], usage)
 			}
 		}
-		
-		// Update memory history
+
 		memUsagePercent := float64(msg.systemStats.MemUsed) / float64(msg.systemStats.MemTotal) * 100
 		m.memHistory = append(m.memHistory[1:], memUsagePercent)
-		
-		// Sort and filter processes
+
 		m.sortProcesses()
 		m.filteredProcs = filterProcesses(m.processes, m.searchQuery)
-		
-		// Ensure selected row is valid
+
 		if m.selectedRow >= len(m.filteredProcs) {
-			m.selectedRow = len(m.filteredProcs) - 1
+			m.selectedRow = max(0, len(m.filteredProcs)-1)
 		}
-		if m.selectedRow < 0 {
-			m.selectedRow = 0
-		}
-		
+
 		return m, nil
-		
+
 	case networkData:
 		m.connections = msg.connections
 		m.interfaces = msg.interfaces
-		
-		// Update bandwidth history (simulate for now)
-		totalIn := 0.0
-		totalOut := 0.0
-		for _, iface := range msg.interfaces {
-			totalIn += float64(iface.BytesIn)
-			totalOut += float64(iface.BytesOut)
+
+		// Update network traffic history
+		totalTraffic := 0.0
+		for _, iface := range m.interfaces {
+			totalTraffic += float64(iface.BytesIn+iface.BytesOut) / 1024 / 1024 // MB
 		}
-		
-		m.bandwidthIn = append(m.bandwidthIn[1:], totalIn/1024/1024) // MB
-		m.bandwidthOut = append(m.bandwidthOut[1:], totalOut/1024/1024) // MB
-		m.networkTraffic = append(m.networkTraffic[1:], (totalIn+totalOut)/1024/1024)
-		
+		m.networkTraffic = append(m.networkTraffic[1:], totalTraffic)
+
 		return m, nil
-		
+
 	case alertData:
-		// Add new alerts to the beginning
-		for _, alert := range msg.alerts {
-			m.alerts = append([]SystemAlert{alert}, m.alerts...)
-		}
-		
-		// Keep only last 100 alerts
-		if len(m.alerts) > 100 {
-			m.alerts = m.alerts[:100]
-		}
-		
+		m.alerts = msg.alerts
 		return m, nil
-		
+
 	case errMsg:
 		m.err = msg
 		return m, nil
-		
-	default:
-		return m, nil
 	}
+
+	return m, nil
 }
 
 func (m model) View() string {
-	if m.err != nil {
-		return m.err.Error()
-	}
-	
-	if m.width == 0 || m.height == 0 {
-		return "Initializing CYBERPUNK COMMAND CENTER..."
-	}
-	
-	var s strings.Builder
-	
-	// Dynamic header based on current view
-	var title string
-	switch m.viewMode {
-	case "overview":
-		title = "⚡ CYBERPUNK COMMAND CENTER v3.0 ⚡"
-	case "processes":
-		title = "⚡ PROCESS MONITOR ⚡"
-	case "network":
-		title = "🌐 NETWORK ANALYZER 🌐"
-	case "alerts":
-		title = "🚨 SYSTEM ALERTS 🚨"
-	default:
-		title = "⚡ COMMAND CENTER ⚡"
-	}
-	
-	// Animated glitch effects
-	glitchTitle := title
-	if m.frame%40 < 10 {
-		glitchTitle = strings.ReplaceAll(title, "C", "Ɔ")
-		glitchTitle = strings.ReplaceAll(glitchTitle, "E", "Ξ")
-		glitchTitle = strings.ReplaceAll(glitchTitle, "R", "Я")
-	}
-	
-	headerStyle := lipgloss.NewStyle().
-		Foreground(neonCyan).
-		Background(darkBg).
-		Bold(true).
-		Padding(0, 1).
-		BorderStyle(lipgloss.DoubleBorder()).
-		BorderForeground(neonMagenta).
-		Width(m.width - 2).
-		Align(lipgloss.Center)
-	
-	s.WriteString(headerStyle.Render(glitchTitle))
-	s.WriteString("\n")
-	
-	// View mode tabs
-	s.WriteString(m.renderViewTabs())
-	s.WriteString("\n")
-	
-	// Main content based on view mode
-	switch m.viewMode {
-	case "overview":
-		s.WriteString(m.renderOverviewDashboard())
-	case "processes":
-		s.WriteString(m.renderProcessView())
-	case "network":
-		s.WriteString(m.renderNetworkView())
-	case "alerts":
-		s.WriteString(m.renderAlertsView())
-	}
-	
-	// Controls footer
-	s.WriteString(m.renderMainControls())
-	
-	// Kill dialog
-	if m.showKillDialog {
-		s.WriteString(m.renderKillDialog())
-	}
-	
 	if m.quitting {
-		s.WriteString("\n" + lipgloss.NewStyle().
-			Foreground(neonRed).
-			Bold(true).
+		return lipgloss.NewStyle().
+			Foreground(primary).
 			Align(lipgloss.Center).
-			Width(m.width).
-			Render(">>> SHUTTING DOWN NEURAL MATRIX... <<<"))
+			Render("Disconnecting from the matrix...\n")
 	}
-	
-	return s.String()
+
+	if m.width == 0 || m.height == 0 {
+		return "Initializing elegant interface..."
+	}
+
+	// Create main layout
+	header := m.renderHeader()
+	tabs := m.renderViewTabs()
+	content := m.renderContent()
+	controls := m.renderControls()
+
+	// Add subtle background effects
+	bg := m.renderBackgroundEffects()
+
+	layout := lipgloss.JoinVertical(lipgloss.Left,
+		header,
+		tabs,
+		content,
+		controls,
+	)
+
+	// Overlay background effects
+	return m.overlayEffects(layout, bg)
 }
 
-// Network data fetching
-func getNetworkConnections() []NetworkConnection {
-	connections := []NetworkConnection{}
-	
-	// Get network connections using netstat
-	cmd := exec.Command("netstat", "-an")
-	output, err := cmd.Output()
-	if err != nil {
-		return connections
-	}
-	
-	lines := strings.Split(string(output), "\n")
-	for i, line := range lines {
-		if i < 2 || strings.TrimSpace(line) == "" {
-			continue // Skip headers
-		}
-		
-		fields := strings.Fields(line)
-		if len(fields) < 4 {
-			continue
-		}
-		
-		protocol := fields[0]
-		localAddr := fields[3]
-		var remoteAddr, state string
-		
-		if len(fields) >= 5 {
-			remoteAddr = fields[4]
-		}
-		if len(fields) >= 6 {
-			state = fields[5]
-		}
-		
-		// Parse addresses
-		localParts := strings.Split(localAddr, ":")
-		remoteParts := strings.Split(remoteAddr, ":")
-		
-		conn := NetworkConnection{
-			Protocol: protocol,
-			State: state,
-		}
-		
-		if len(localParts) >= 2 {
-			conn.LocalAddr = strings.Join(localParts[:len(localParts)-1], ":")
-			conn.LocalPort = localParts[len(localParts)-1]
-		}
-		
-		if len(remoteParts) >= 2 {
-			conn.RemoteAddr = strings.Join(remoteParts[:len(remoteParts)-1], ":")
-			conn.RemotePort = remoteParts[len(remoteParts)-1]
-		}
-		
-		connections = append(connections, conn)
-	}
-	
-	return connections
-}
+func (m model) renderHeader() string {
+	title := "⟨ QUANTUM COMMAND CENTER ⟩"
 
-func getNetworkInterfaces() []NetworkInterface {
-	interfaces := []NetworkInterface{}
-	
-	// Simulate network interface data for now
-	interfaces = append(interfaces, NetworkInterface{
-		Name: "en0",
-		BytesIn: uint64(rand.Intn(1000000000)),
-		BytesOut: uint64(rand.Intn(1000000000)),
-		PacketsIn: uint64(rand.Intn(1000000)),
-		PacketsOut: uint64(rand.Intn(1000000)),
-		Speed: 1000000000, // 1Gbps
-	})
-	
-	return interfaces
-}
-
-func getSystemAlerts() []SystemAlert {
-	alerts := []SystemAlert{}
-	
-	// Generate some sample alerts
-	alertTypes := []string{"CPU", "Memory", "Disk", "Network", "Process"}
-	levels := []string{"INFO", "WARN", "ERROR"}
-	
-	if rand.Float64() < 0.3 { // 30% chance of new alert
-		alertType := alertTypes[rand.Intn(len(alertTypes))]
-		level := levels[rand.Intn(len(levels))]
-		
-		var message string
-		switch alertType {
-		case "CPU":
-			message = fmt.Sprintf("CPU usage is %.1f%%", rand.Float64()*100)
-		case "Memory":
-			message = fmt.Sprintf("Memory usage is %.1f%%", rand.Float64()*100)
-		case "Network":
-			message = "High network traffic detected"
-		default:
-			message = fmt.Sprintf("%s alert triggered", alertType)
-		}
-		
-		alerts = append(alerts, SystemAlert{
-			Type: alertType,
-			Level: level,
-			Message: message,
-			Timestamp: time.Now(),
-			Source: "system",
-		})
-	}
-	
-	return alerts
-}
-
-// Process management functions
-func getProcessesAndStats() ([]Process, SystemStats) {
-	processes := []Process{}
-	stats := SystemStats{
-		CPUCores: runtime.NumCPU(),
-		CPUUsage: make([]float64, runtime.NumCPU()),
-	}
-	
-	// Get processes using ps command
-	cmd := exec.Command("ps", "ax", "-o", "pid,user,pcpu,pmem,stat,ppid,etime,comm")
-	output, err := cmd.Output()
-	if err != nil {
-		return processes, stats
-	}
-	
-	lines := strings.Split(string(output), "\n")
-	for i, line := range lines {
-		if i == 0 || strings.TrimSpace(line) == "" {
-			continue // Skip header and empty lines
-		}
-		
-		fields := strings.Fields(line)
-		if len(fields) < 8 {
-			continue
-		}
-		
-		pid, _ := strconv.Atoi(fields[0])
-		cpu, _ := strconv.ParseFloat(fields[2], 64)
-		mem, _ := strconv.ParseFloat(fields[3], 64)
-		ppid, _ := strconv.Atoi(fields[5])
-		
-		process := Process{
-			PID:       pid,
-			User:      fields[1],
-			CPU:       cpu,
-			Memory:    mem,
-			State:     fields[4],
-			PPID:      ppid,
-			StartTime: fields[6],
-			Name:      fields[7],
-			Command:   strings.Join(fields[7:], " "),
-		}
-		processes = append(processes, process)
-	}
-	
-	// Get memory info
-	cmd = exec.Command("sysctl", "-n", "hw.memsize")
-	if output, err := cmd.Output(); err == nil {
-		if total, err := strconv.ParseUint(strings.TrimSpace(string(output)), 10, 64); err == nil {
-			stats.MemTotal = total
-		}
-	}
-	
-	// Get memory usage (simplified)
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	stats.MemUsed = m.Alloc
-	
-	// Simulate CPU usage per core
-	for i := range stats.CPUUsage {
-		stats.CPUUsage[i] = math.Max(0, math.Min(100, math.Sin(float64(time.Now().UnixNano()/1000000000+int64(i)))*30+50+rand.Float64()*20))
-	}
-	
-	// Get load average
-	cmd = exec.Command("sysctl", "-n", "vm.loadavg")
-	if output, err := cmd.Output(); err == nil {
-		parts := strings.Fields(strings.TrimSpace(string(output)))
-		if len(parts) >= 3 {
-			stats.LoadAvg[0], _ = strconv.ParseFloat(parts[1], 64)
-			stats.LoadAvg[1], _ = strconv.ParseFloat(parts[2], 64)
-			stats.LoadAvg[2], _ = strconv.ParseFloat(parts[3], 64)
-		}
-	}
-	
-	return processes, stats
-}
-
-func killProcess(pid int) {
-	syscall.Kill(pid, syscall.SIGTERM)
-}
-
-func (m *model) sortProcesses() {
-	sort.Slice(m.processes, func(i, j int) bool {
-		switch m.sortColumn {
-		case "CPU":
-			if m.sortReverse {
-				return m.processes[i].CPU > m.processes[j].CPU
-			}
-			return m.processes[i].CPU < m.processes[j].CPU
-		case "Memory":
-			if m.sortReverse {
-				return m.processes[i].Memory > m.processes[j].Memory
-			}
-			return m.processes[i].Memory < m.processes[j].Memory
-		case "PID":
-			if m.sortReverse {
-				return m.processes[i].PID > m.processes[j].PID
-			}
-			return m.processes[i].PID < m.processes[j].PID
-		default:
-			return m.processes[i].PID < m.processes[j].PID
-		}
-	})
-}
-
-func filterProcesses(processes []Process, query string) []Process {
-	if query == "" {
-		return processes
-	}
-	
-	filtered := []Process{}
-	query = strings.ToLower(query)
-	
-	for _, p := range processes {
-		if strings.Contains(strings.ToLower(p.Name), query) ||
-			strings.Contains(strings.ToLower(p.User), query) ||
-			strings.Contains(strings.ToLower(p.Command), query) {
-			filtered = append(filtered, p)
-		}
-	}
-	
-	return filtered
-}
-
-// Render functions
-func (m model) renderSystemOverview() string {
-	var s strings.Builder
-	
-	// CPU cores overview
-	cpuSection := lipgloss.NewStyle().
-		Foreground(neonCyan).
+	titleStyle := lipgloss.NewStyle().
+		Foreground(primary).
 		Bold(true).
-		Render("⚡ CPU CORES")
-	
-	s.WriteString(cpuSection + "\n")
-	
-	coresPerRow := 4
-	for i := 0; i < len(m.systemStats.CPUUsage); i += coresPerRow {
-		for j := 0; j < coresPerRow && i+j < len(m.systemStats.CPUUsage); j++ {
-			idx := i + j
-			usage := 0.0
-			if idx < len(m.systemStats.CPUUsage) {
-				usage = m.systemStats.CPUUsage[idx]
-			}
-			
-			bar := renderBar(usage, 100, 10, neonGreen, neonRed)
-			coreLabel := fmt.Sprintf("CPU%d", idx)
-			
-			color := neonGreen
-			if usage > 80 {
-				color = neonRed
-			} else if usage > 60 {
-				color = neonYellow
-			}
-			
-			s.WriteString(lipgloss.NewStyle().Foreground(color).Render(fmt.Sprintf("%-5s %s %.1f%%", coreLabel, bar, usage)))
-			if j < coresPerRow-1 && i+j+1 < len(m.systemStats.CPUUsage) {
-				s.WriteString("  ")
-			}
+		Align(lipgloss.Center).
+		Width(m.width)
+
+	// Add subtle glow effect
+	glowStyle := lipgloss.NewStyle().
+		Foreground(glow).
+		Faint(true).
+		Align(lipgloss.Center).
+		Width(m.width)
+
+	time := lipgloss.NewStyle().
+		Foreground(textMuted).
+		Align(lipgloss.Right).
+		Width(m.width).
+		Render(fmt.Sprintf("◉ %s", time.Now().Format("15:04:05")))
+
+	return lipgloss.JoinVertical(lipgloss.Left,
+		glowStyle.Render("═══════════════════════════════════════"),
+		titleStyle.Render(title),
+		glowStyle.Render("═══════════════════════════════════════"),
+		time,
+		"",
+	)
+}
+
+func (m model) renderViewTabs() string {
+	tabs := []struct {
+		key   string
+		name  string
+		icon  string
+		color lipgloss.Color
+	}{
+		{"1", "Overview", "⬢", primary},
+		{"2", "Processes", "⚡", secondary},
+		{"3", "Network", "◈", accent},
+		{"4", "Alerts", "⚠", warning},
+	}
+
+	activeIndex := 0
+	switch m.viewMode {
+	case "overview":
+		activeIndex = 0
+	case "processes":
+		activeIndex = 1
+	case "network":
+		activeIndex = 2
+	case "alerts":
+		activeIndex = 3
+	}
+
+	var tabStrs []string
+	for i, tab := range tabs {
+		content := fmt.Sprintf("%s %s %s", tab.icon, tab.key, tab.name)
+
+		if i == activeIndex {
+			// Active tab with elegant styling
+			tabStrs = append(tabStrs, lipgloss.NewStyle().
+				Foreground(bg).
+				Background(tab.color).
+				Bold(true).
+				Padding(0, 2).
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(tab.color).
+				Render(content))
+		} else {
+			// Inactive tab with subtle styling
+			tabStrs = append(tabStrs, lipgloss.NewStyle().
+				Foreground(tab.color).
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(textFaint).
+				Padding(0, 2).
+				Render(content))
+		}
+	}
+
+	return lipgloss.JoinHorizontal(lipgloss.Center, tabStrs...) + "\n"
+}
+
+func (m model) renderContent() string {
+	switch m.viewMode {
+	case "overview":
+		return m.renderOverview()
+	case "processes":
+		return m.renderProcesses()
+	case "network":
+		return m.renderNetwork()
+	case "alerts":
+		return m.renderAlerts()
+	default:
+		return m.renderOverview()
+	}
+}
+
+func (m model) renderOverview() string {
+	leftPanel := m.renderSystemPanel()
+	centerPanel := m.renderNetworkPanel()
+	rightPanel := m.renderAlertsPanel()
+
+	panelStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		Padding(1, 2).
+		Height(m.height - 12)
+
+	leftStyled := panelStyle.Copy().
+		BorderForeground(primary).
+		Width((m.width / 3) - 2).
+		Render(leftPanel)
+
+	centerStyled := panelStyle.Copy().
+		BorderForeground(accent).
+		Width((m.width / 3) - 2).
+		Render(centerPanel)
+
+	rightStyled := panelStyle.Copy().
+		BorderForeground(warning).
+		Width((m.width / 3) - 2).
+		Render(rightPanel)
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftStyled, centerStyled, rightStyled)
+}
+
+func (m model) renderSystemPanel() string {
+	var s strings.Builder
+
+	// Title with icon
+	title := lipgloss.NewStyle().
+		Foreground(primary).
+		Bold(true).
+		Render("⬢ SYSTEM STATUS")
+	s.WriteString(title + "\n\n")
+
+	// CPU information
+	if len(m.systemStats.CPUUsage) > 0 {
+		avgCPU := 0.0
+		for _, usage := range m.systemStats.CPUUsage {
+			avgCPU += usage
+		}
+		avgCPU /= float64(len(m.systemStats.CPUUsage))
+
+		cpuLabel := lipgloss.NewStyle().Foreground(text).Render("CPU Usage:")
+		cpuBar := m.renderElegantBar(avgCPU, 100, 20, success, danger)
+		cpuText := lipgloss.NewStyle().Foreground(textMuted).Render(fmt.Sprintf("%.1f%%", avgCPU))
+
+		s.WriteString(fmt.Sprintf("%s\n%s %s\n\n", cpuLabel, cpuBar, cpuText))
+
+		// CPU cores
+		s.WriteString(lipgloss.NewStyle().Foreground(textMuted).Render("Cores:\n"))
+		for i, usage := range m.systemStats.CPUUsage {
+			if i >= 8 {
+				break
+			} // Limit display
+			coreBar := m.renderMiniBar(usage, 100, 12, success, danger)
+			s.WriteString(fmt.Sprintf("C%d %s %.1f%%\n", i, coreBar, usage))
 		}
 		s.WriteString("\n")
 	}
-	
-	// Memory and Load info
-	memUsage := float64(m.systemStats.MemUsed) / float64(m.systemStats.MemTotal) * 100
-	memBar := renderBar(memUsage, 100, 30, neonCyan, neonRed)
-	
-	loadAvgColor := neonGreen
-	if m.systemStats.LoadAvg[0] > float64(m.systemStats.CPUCores) {
-		loadAvgColor = neonRed
+
+	// Memory information
+	if m.systemStats.MemTotal > 0 {
+		memUsage := float64(m.systemStats.MemUsed) / float64(m.systemStats.MemTotal) * 100
+
+		memLabel := lipgloss.NewStyle().Foreground(text).Render("Memory Usage:")
+		memBar := m.renderElegantBar(memUsage, 100, 20, success, danger)
+		memText := lipgloss.NewStyle().Foreground(textMuted).Render(fmt.Sprintf("%.1f%% (%s/%s)",
+			memUsage, formatBytes(m.systemStats.MemUsed), formatBytes(m.systemStats.MemTotal)))
+
+		s.WriteString(fmt.Sprintf("%s\n%s\n%s\n\n", memLabel, memBar, memText))
 	}
-	
-	memInfo := fmt.Sprintf("MEM: %s %.1f%% (%s / %s)",
-		memBar, memUsage,
-		formatBytes(m.systemStats.MemUsed),
-		formatBytes(m.systemStats.MemTotal))
-	
-	loadInfo := fmt.Sprintf("Load: %.2f %.2f %.2f",
-		m.systemStats.LoadAvg[0], m.systemStats.LoadAvg[1], m.systemStats.LoadAvg[2])
-	
-	s.WriteString("\n")
-	s.WriteString(lipgloss.NewStyle().Foreground(neonCyan).Render(memInfo) + "\n")
-	s.WriteString(lipgloss.NewStyle().Foreground(loadAvgColor).Render(loadInfo) + "\n")
-	
+
+	// Load average
+	loadText := lipgloss.NewStyle().Foreground(text).Render("Load Average:")
+	loadValues := lipgloss.NewStyle().Foreground(textMuted).Render(
+		fmt.Sprintf("%.2f %.2f %.2f", m.systemStats.LoadAvg[0], m.systemStats.LoadAvg[1], m.systemStats.LoadAvg[2]))
+	s.WriteString(fmt.Sprintf("%s\n%s\n\n", loadText, loadValues))
+
+	// Uptime
+	uptimeText := lipgloss.NewStyle().Foreground(text).Render("Uptime:")
+	uptimeValue := lipgloss.NewStyle().Foreground(textMuted).Render(formatDuration(m.systemStats.Uptime))
+	s.WriteString(fmt.Sprintf("%s\n%s", uptimeText, uptimeValue))
+
 	return s.String()
 }
 
-func (m model) renderProcessList() string {
+func (m model) renderNetworkPanel() string {
 	var s strings.Builder
-	
-	// Process list header
-	headerText := fmt.Sprintf("⚡ PROCESSES (%d) - Sort: %s", len(m.filteredProcs), m.sortColumn)
-	if m.searchQuery != "" {
-		headerText += fmt.Sprintf(" - Search: '%s'", m.searchQuery)
-	}
-	
-	header := lipgloss.NewStyle().
-		Foreground(neonMagenta).
+
+	title := lipgloss.NewStyle().
+		Foreground(accent).
 		Bold(true).
-		Render(headerText)
-	
-	s.WriteString(header + "\n")
-	
-	// Column headers
-	pidHeader := lipgloss.NewStyle().Foreground(neonCyan).Bold(true).Width(8).Render("PID")
-	userHeader := lipgloss.NewStyle().Foreground(neonCyan).Bold(true).Width(12).Render("USER")
-	cpuHeader := lipgloss.NewStyle().Foreground(neonCyan).Bold(true).Width(8).Render("CPU%")
-	memHeader := lipgloss.NewStyle().Foreground(neonCyan).Bold(true).Width(8).Render("MEM%")
-	stateHeader := lipgloss.NewStyle().Foreground(neonCyan).Bold(true).Width(8).Render("STATE")
-	nameHeader := lipgloss.NewStyle().Foreground(neonCyan).Bold(true).Render("COMMAND")
-	
-	headerRow := fmt.Sprintf("%s %s %s %s %s %s", 
-		pidHeader, userHeader, cpuHeader, memHeader, stateHeader, nameHeader)
-	
-	s.WriteString(headerRow + "\n")
-	s.WriteString(strings.Repeat("─", m.width-4) + "\n")
-	
-	// Process rows
-	visibleRows := m.height - 12 // Account for headers and footers
-	startIdx := m.scrollOffset
-	endIdx := startIdx + visibleRows
-	
-	if endIdx > len(m.filteredProcs) {
-		endIdx = len(m.filteredProcs)
+		Render("◈ NETWORK STATUS")
+	s.WriteString(title + "\n\n")
+
+	// Network interfaces
+	s.WriteString(lipgloss.NewStyle().Foreground(text).Render("Interfaces:\n"))
+	for _, iface := range m.interfaces {
+		if len(iface.Name) == 0 {
+			continue
+		}
+
+		ifaceStyle := lipgloss.NewStyle().
+			Foreground(textMuted).
+			Border(lipgloss.NormalBorder(), false, false, false, true).
+			BorderForeground(accent).
+			PaddingLeft(1)
+
+		content := fmt.Sprintf("%s\n↑ %s  ↓ %s",
+			iface.Name, formatBytes(iface.BytesOut), formatBytes(iface.BytesIn))
+
+		s.WriteString(ifaceStyle.Render(content) + "\n\n")
 	}
-	
+
+	// Active connections
+	s.WriteString(lipgloss.NewStyle().Foreground(text).Render("Active Connections:\n"))
+	connectionCount := min(len(m.connections), 8)
+	for i := 0; i < connectionCount; i++ {
+		conn := m.connections[i]
+
+		stateColor := success
+		switch conn.State {
+		case "ESTABLISHED":
+			stateColor = success
+		case "LISTEN":
+			stateColor = accent
+		case "TIME_WAIT":
+			stateColor = warning
+		default:
+			stateColor = textMuted
+		}
+
+		connText := fmt.Sprintf("%-4s %s:%s → %s",
+			conn.Protocol, conn.LocalAddr, conn.LocalPort, conn.State)
+		if len(connText) > 28 {
+			connText = connText[:25] + "..."
+		}
+
+		s.WriteString(lipgloss.NewStyle().Foreground(stateColor).Render(connText) + "\n")
+	}
+
+	// Network activity visualization
+	s.WriteString("\n" + lipgloss.NewStyle().Foreground(text).Render("Activity:") + "\n")
+	activityViz := m.renderNetworkActivity()
+	s.WriteString(activityViz)
+
+	return s.String()
+}
+
+func (m model) renderAlertsPanel() string {
+	var s strings.Builder
+
+	title := lipgloss.NewStyle().
+		Foreground(warning).
+		Bold(true).
+		Render("⚠ SYSTEM ALERTS")
+	s.WriteString(title + "\n\n")
+
+	if len(m.alerts) == 0 {
+		noAlerts := lipgloss.NewStyle().
+			Foreground(success).
+			Render("✓ All systems nominal")
+		s.WriteString(noAlerts)
+		return s.String()
+	}
+
+	// Show recent alerts with elegant styling
+	maxAlerts := min(len(m.alerts), 10)
+	for i := 0; i < maxAlerts; i++ {
+		alert := m.alerts[i]
+
+		var levelColor lipgloss.Color
+		var icon string
+		switch alert.Level {
+		case "ERROR":
+			levelColor = danger
+			icon = "●"
+		case "WARN":
+			levelColor = warning
+			icon = "◐"
+		case "INFO":
+			levelColor = accent
+			icon = "◯"
+		default:
+			levelColor = textMuted
+			icon = "○"
+		}
+
+		timestamp := alert.Timestamp.Format("15:04")
+		message := alert.Message
+		if len(message) > 30 {
+			message = message[:27] + "..."
+		}
+
+		alertStyle := lipgloss.NewStyle().
+			Foreground(levelColor).
+			Border(lipgloss.NormalBorder(), false, false, false, true).
+			BorderForeground(levelColor).
+			PaddingLeft(1)
+
+		content := fmt.Sprintf("%s %s\n%s", icon, timestamp, message)
+		s.WriteString(alertStyle.Render(content) + "\n\n")
+	}
+
+	return s.String()
+}
+
+func (m model) renderProcesses() string {
+	var s strings.Builder
+
+	// Header
+	title := fmt.Sprintf("⚡ PROCESS MONITOR (%d processes)", len(m.filteredProcs))
+	if m.searchQuery != "" {
+		title += fmt.Sprintf(" - Filtered: '%s'", m.searchQuery)
+	}
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(secondary).
+		Bold(true)
+	s.WriteString(headerStyle.Render(title) + "\n\n")
+
+	// Column headers with elegant styling
+	headers := []string{"PID", "USER", "CPU%", "MEM%", "STATE", "COMMAND"}
+	widths := []int{8, 12, 8, 8, 8, m.width - 50}
+
+	var headerParts []string
+	for i, header := range headers {
+		headerStyle := lipgloss.NewStyle().
+			Foreground(primary).
+			Bold(true).
+			Width(widths[i]).
+			Align(lipgloss.Left)
+		headerParts = append(headerParts, headerStyle.Render(header))
+	}
+
+	s.WriteString(strings.Join(headerParts, " ") + "\n")
+	s.WriteString(lipgloss.NewStyle().
+		Foreground(textFaint).
+		Render(strings.Repeat("─", m.width-2)) + "\n\n")
+
+	// Process list
+	visibleRows := m.height - 15
+	startIdx := m.scrollOffset
+	endIdx := min(startIdx+visibleRows, len(m.filteredProcs))
+
 	for i := startIdx; i < endIdx; i++ {
 		if i >= len(m.filteredProcs) {
 			break
 		}
-		
+
 		proc := m.filteredProcs[i]
 		isSelected := i == m.selectedRow
-		
-		// Process state colors
-		stateColor := neonGreen
+
+		// Dynamic colors based on values
+		var cpuColor, memColor, stateColor lipgloss.Color
+
+		if proc.CPU > 80 {
+			cpuColor = danger
+		} else if proc.CPU > 40 {
+			cpuColor = warning
+		} else {
+			cpuColor = success
+		}
+
+		if proc.Memory > 10 {
+			memColor = danger
+		} else if proc.Memory > 5 {
+			memColor = warning
+		} else {
+			memColor = success
+		}
+
 		switch proc.State {
 		case "R", "R+":
-			stateColor = neonGreen
+			stateColor = success
 		case "S", "S+":
-			stateColor = neonCyan
+			stateColor = accent
 		case "T":
-			stateColor = neonYellow
+			stateColor = warning
 		case "Z":
-			stateColor = neonRed
+			stateColor = danger
+		default:
+			stateColor = textMuted
 		}
-		
-		// CPU color based on usage
-		cpuColor := neonGreen
-		if proc.CPU > 50 {
-			cpuColor = neonRed
-		} else if proc.CPU > 25 {
-			cpuColor = neonYellow
-		}
-		
-		// Memory color
-		memColor := neonGreen
-		if proc.Memory > 5 {
-			memColor = neonRed
-		} else if proc.Memory > 2 {
-			memColor = neonYellow
-		}
-		
-		// Truncate command if too long
+
+		// Format fields
+		pidText := fmt.Sprintf("%d", proc.PID)
+		userText := proc.User
+		cpuText := fmt.Sprintf("%.1f", proc.CPU)
+		memText := fmt.Sprintf("%.1f", proc.Memory)
+		stateText := proc.State
+
 		command := proc.Command
-		maxCmdLen := m.width - 50
-		if len(command) > maxCmdLen {
-			command = command[:maxCmdLen-3] + "..."
+		if len(command) > widths[5] {
+			command = command[:widths[5]-3] + "..."
 		}
-		
-		pidText := lipgloss.NewStyle().Width(8).Render(fmt.Sprintf("%d", proc.PID))
-		userText := lipgloss.NewStyle().Width(12).Render(proc.User)
-		cpuText := lipgloss.NewStyle().Foreground(cpuColor).Width(8).Render(fmt.Sprintf("%.1f", proc.CPU))
-		memText := lipgloss.NewStyle().Foreground(memColor).Width(8).Render(fmt.Sprintf("%.1f", proc.Memory))
-		stateText := lipgloss.NewStyle().Foreground(stateColor).Width(8).Render(proc.State)
-		cmdText := lipgloss.NewStyle().Render(command)
-		
-		row := fmt.Sprintf("%s %s %s %s %s %s", 
-			pidText, userText, cpuText, memText, stateText, cmdText)
-		
+
+		// Create row parts
+		parts := []string{
+			lipgloss.NewStyle().Width(widths[0]).Render(pidText),
+			lipgloss.NewStyle().Width(widths[1]).Render(userText),
+			lipgloss.NewStyle().Width(widths[2]).Foreground(cpuColor).Render(cpuText),
+			lipgloss.NewStyle().Width(widths[3]).Foreground(memColor).Render(memText),
+			lipgloss.NewStyle().Width(widths[4]).Foreground(stateColor).Render(stateText),
+			lipgloss.NewStyle().Foreground(text).Render(command),
+		}
+
+		row := strings.Join(parts, " ")
+
 		if isSelected {
 			row = lipgloss.NewStyle().
-				Foreground(darkBg).
-				Background(neonCyan).
+				Foreground(bg).
+				Background(primary).
 				Bold(true).
-				Width(m.width-4).
-				Render(row)
+				Width(m.width - 2).
+				Render(" " + row + " ")
 		}
-		
+
 		s.WriteString(row + "\n")
 	}
-	
-	// Add particles as background effect
-	if len(m.particles) > 0 {
-		particleLines := make([]string, 3)
-		for _, p := range m.particles[:min(len(m.particles), 10)] {
-			if int(p.y)%3 < len(particleLines) {
-				particleLines[int(p.y)%3] += string(p.char)
-			}
+
+	return s.String()
+}
+
+func (m model) renderNetwork() string {
+	var s strings.Builder
+
+	title := lipgloss.NewStyle().
+		Foreground(accent).
+		Bold(true).
+		Render("◈ NETWORK MONITOR")
+	s.WriteString(title + "\n\n")
+
+	// Interfaces section
+	s.WriteString(lipgloss.NewStyle().Foreground(text).Bold(true).Render("Network Interfaces:") + "\n")
+	for _, iface := range m.interfaces {
+		if len(iface.Name) == 0 {
+			continue
 		}
-		for _, line := range particleLines {
-			if line != "" {
-				s.WriteString(lipgloss.NewStyle().
-					Foreground(lipgloss.Color(m.particles[0].color)).
-					Faint(true).
-					Render(line) + "\n")
-			}
-		}
+
+		ifaceBox := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(accent).
+			Padding(1).
+			Margin(0, 1, 1, 0).
+			Width(30)
+
+		content := fmt.Sprintf("%s\n\n↑ Out: %s\n↓ In:  %s\n📦 Packets: %d/%d",
+			lipgloss.NewStyle().Foreground(accent).Bold(true).Render(iface.Name),
+			formatBytes(iface.BytesOut),
+			formatBytes(iface.BytesIn),
+			iface.PacketsOut, iface.PacketsIn)
+
+		s.WriteString(ifaceBox.Render(content) + "\n")
 	}
-	
+
+	// Connections section
+	s.WriteString(lipgloss.NewStyle().Foreground(text).Bold(true).Render("Active Connections:") + "\n\n")
+
+	// Connection headers
+	connHeaders := []string{"PROTO", "LOCAL", "REMOTE", "STATE", "PROCESS"}
+	connWidths := []int{8, 22, 22, 12, m.width - 70}
+
+	var headerParts []string
+	for i, header := range connHeaders {
+		headerStyle := lipgloss.NewStyle().
+			Foreground(accent).
+			Bold(true).
+			Width(connWidths[i])
+		headerParts = append(headerParts, headerStyle.Render(header))
+	}
+
+	s.WriteString(strings.Join(headerParts, " ") + "\n")
+	s.WriteString(strings.Repeat("─", m.width-2) + "\n")
+
+	// Connection list
+	maxConns := min(len(m.connections), m.height-18)
+	for i := 0; i < maxConns; i++ {
+		conn := m.connections[i]
+
+		stateColor := success
+		switch conn.State {
+		case "ESTABLISHED":
+			stateColor = success
+		case "LISTEN":
+			stateColor = accent
+		case "TIME_WAIT":
+			stateColor = warning
+		default:
+			stateColor = textMuted
+		}
+
+		local := fmt.Sprintf("%s:%s", conn.LocalAddr, conn.LocalPort)
+		remote := fmt.Sprintf("%s:%s", conn.RemoteAddr, conn.RemotePort)
+
+		if len(local) > connWidths[1] {
+			local = local[:connWidths[1]-3] + "..."
+		}
+		if len(remote) > connWidths[2] {
+			remote = remote[:connWidths[2]-3] + "..."
+		}
+		if len(conn.ProcessName) > connWidths[4] {
+			conn.ProcessName = conn.ProcessName[:connWidths[4]-3] + "..."
+		}
+
+		parts := []string{
+			lipgloss.NewStyle().Width(connWidths[0]).Render(conn.Protocol),
+			lipgloss.NewStyle().Width(connWidths[1]).Render(local),
+			lipgloss.NewStyle().Width(connWidths[2]).Render(remote),
+			lipgloss.NewStyle().Width(connWidths[3]).Foreground(stateColor).Render(conn.State),
+			lipgloss.NewStyle().Foreground(textMuted).Render(conn.ProcessName),
+		}
+
+		s.WriteString(strings.Join(parts, " ") + "\n")
+	}
+
+	return s.String()
+}
+
+func (m model) renderAlerts() string {
+	var s strings.Builder
+
+	title := lipgloss.NewStyle().
+		Foreground(warning).
+		Bold(true).
+		Render("⚠ SYSTEM ALERTS")
+	s.WriteString(title + "\n\n")
+
+	if len(m.alerts) == 0 {
+		noAlerts := lipgloss.NewStyle().
+			Foreground(success).
+			Align(lipgloss.Center).
+			Width(m.width).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(success).
+			Padding(2).
+			Render("✓ No Active Alerts\n\nAll systems are operating normally")
+
+		s.WriteString(noAlerts)
+		return s.String()
+	}
+
+	// Alert list with elegant cards
+	maxAlerts := min(len(m.alerts), m.height-10)
+	for i := 0; i < maxAlerts; i++ {
+		alert := m.alerts[i]
+
+		var levelColor lipgloss.Color
+		var icon string
+		var severity string
+
+		switch alert.Level {
+		case "ERROR":
+			levelColor = danger
+			icon = "🔴"
+			severity = "CRITICAL"
+		case "WARN":
+			levelColor = warning
+			icon = "🟡"
+			severity = "WARNING"
+		case "INFO":
+			levelColor = accent
+			icon = "🔵"
+			severity = "INFO"
+		default:
+			levelColor = textMuted
+			icon = "⚪"
+			severity = "NOTICE"
+		}
+
+		timestamp := alert.Timestamp.Format("2006-01-02 15:04:05")
+
+		alertCard := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(levelColor).
+			Padding(1).
+			Margin(0, 0, 1, 0).
+			Width(m.width - 4)
+
+		header := lipgloss.JoinHorizontal(lipgloss.Left,
+			lipgloss.NewStyle().Foreground(levelColor).Bold(true).Render(fmt.Sprintf("%s %s", icon, severity)),
+			lipgloss.NewStyle().Foreground(textMuted).Align(lipgloss.Right).Width(m.width-20).Render(timestamp),
+		)
+
+		content := fmt.Sprintf("%s\n\n%s\n\nSource: %s • Type: %s",
+			header,
+			lipgloss.NewStyle().Foreground(text).Render(alert.Message),
+			lipgloss.NewStyle().Foreground(textMuted).Render(alert.Source),
+			lipgloss.NewStyle().Foreground(textMuted).Render(string(alert.Type)))
+
+		s.WriteString(alertCard.Render(content) + "\n")
+	}
+
 	return s.String()
 }
 
 func (m model) renderControls() string {
-	controls := []string{}
-	
-	if m.searchMode {
-		controls = append(controls, 
-			lipgloss.NewStyle().Foreground(neonYellow).Render("SEARCH: "+m.searchQuery+"_"),
-			lipgloss.NewStyle().Foreground(neonCyan).Render("ESC: exit search"),
-		)
-	} else {
+	var controls []string
+
+	switch m.viewMode {
+	case "processes":
+		if m.searchMode {
+			controls = append(controls,
+				lipgloss.NewStyle().Foreground(warning).Render("🔍 SEARCH: "+m.searchQuery+"_"),
+				lipgloss.NewStyle().Foreground(textMuted).Render("ESC: cancel"),
+			)
+		} else {
+			controls = append(controls,
+				lipgloss.NewStyle().Foreground(primary).Render("↑↓: navigate"),
+				lipgloss.NewStyle().Foreground(danger).Render("k: kill"),
+				lipgloss.NewStyle().Foreground(warning).Render("/: search"),
+				lipgloss.NewStyle().Foreground(accent).Render("c/m/p: sort"),
+			)
+		}
+	default:
 		controls = append(controls,
-			lipgloss.NewStyle().Foreground(neonGreen).Render("↑/↓: navigate"),
-			lipgloss.NewStyle().Foreground(neonMagenta).Render("k: kill"),
-			lipgloss.NewStyle().Foreground(neonYellow).Render("/: search"),
-			lipgloss.NewStyle().Foreground(neonCyan).Render("c/m/p: sort"),
-			lipgloss.NewStyle().Foreground(neonRed).Render("q: quit"),
+			lipgloss.NewStyle().Foreground(primary).Render("TAB: cycle views"),
+			lipgloss.NewStyle().Foreground(accent).Render("1-4: quick switch"),
 		)
 	}
-	
-	return "\n" + lipgloss.NewStyle().
-		Background(darkBg).
-		Padding(0, 1).
+
+	controls = append(controls, lipgloss.NewStyle().Foreground(danger).Render("q: quit"))
+
+	return lipgloss.NewStyle().
+		Background(bgLight).
+		Foreground(text).
+		Padding(1, 2).
 		Width(m.width).
-		Render(strings.Join(controls, " | "))
+		Align(lipgloss.Center).
+		Render(strings.Join(controls, "  •  "))
 }
 
-func (m model) renderKillDialog() string {
-	if !m.showKillDialog {
+// Enhanced visual effects
+func (m model) renderElegantBar(value, max float64, width int, lowColor, highColor lipgloss.Color) string {
+	if max == 0 {
 		return ""
 	}
-	
-	dialog := fmt.Sprintf("Kill process %d? (y/N)", m.killPID)
-	
-	style := lipgloss.NewStyle().
-		Foreground(neonRed).
-		Background(darkBg).
-		Bold(true).
-		Border(lipgloss.DoubleBorder()).
-		BorderForeground(neonRed).
-		Padding(1, 2).
-		Align(lipgloss.Center).
-		Width(30)
-	
-	// Center the dialog
-	return "\n" + lipgloss.Place(m.width, 5, lipgloss.Center, lipgloss.Center, style.Render(dialog))
+
+	ratio := value / max
+	filled := int(ratio * float64(width))
+	if filled > width {
+		filled = width
+	}
+
+	// Create gradient effect
+	var segments []string
+	for i := 0; i < width; i++ {
+		if i < filled {
+			if ratio > 0.7 {
+				segments = append(segments, lipgloss.NewStyle().Foreground(highColor).Render("█"))
+			} else if ratio > 0.4 {
+				segments = append(segments, lipgloss.NewStyle().Foreground(warning).Render("█"))
+			} else {
+				segments = append(segments, lipgloss.NewStyle().Foreground(lowColor).Render("█"))
+			}
+		} else {
+			segments = append(segments, lipgloss.NewStyle().Foreground(textFaint).Render("░"))
+		}
+	}
+
+	return strings.Join(segments, "")
 }
 
+func (m model) renderMiniBar(value, max float64, width int, lowColor, highColor lipgloss.Color) string {
+	if max == 0 {
+		return ""
+	}
+
+	ratio := value / max
+	filled := int(ratio * float64(width))
+	if filled > width {
+		filled = width
+	}
+
+	bar := strings.Repeat("▓", filled) + strings.Repeat("░", width-filled)
+
+	color := lowColor
+	if ratio > 0.7 {
+		color = highColor
+	} else if ratio > 0.4 {
+		color = warning
+	}
+
+	return lipgloss.NewStyle().Foreground(color).Render(bar)
+}
+
+func (m model) renderNetworkActivity() string {
+	var lines []string
+
+	// Create a wave pattern for network activity
+	for row := 0; row < 6; row++ {
+		var line strings.Builder
+		for col := 0; col < 25; col++ {
+			char := "·"
+
+			// Create flowing wave pattern
+			waveHeight := 2.0 + 1.5*math.Sin(float64(col)*0.3+float64(m.frame)*0.05)
+			if math.Abs(float64(row)-waveHeight) < 0.8 {
+				char = "~"
+			}
+
+			// Add data flow indicators
+			if (col+m.frame/4)%8 == 0 {
+				char = "◦"
+			}
+
+			line.WriteString(char)
+		}
+
+		color := accent
+		if row == 2 || row == 3 {
+			color = primary
+		}
+
+		lines = append(lines, lipgloss.NewStyle().Foreground(color).Render(line.String()))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func (m model) renderBackgroundEffects() string {
+	// This would render subtle background effects
+	// For now, return empty to keep focus on content
+	return ""
+}
+
+func (m model) overlayEffects(content, effects string) string {
+	// Simple overlay - in a full implementation, this would blend effects with content
+	return content
+}
+
+// Utility functions
 func formatBytes(bytes uint64) string {
 	const unit = 1024
 	if bytes < unit {
@@ -1100,311 +1290,214 @@ func formatBytes(bytes uint64) string {
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
+func formatDuration(d time.Duration) string {
+	days := int(d.Hours()) / 24
+	hours := int(d.Hours()) % 24
+	minutes := int(d.Minutes()) % 60
+
+	if days > 0 {
+		return fmt.Sprintf("%dd %dh %dm", days, hours, minutes)
 	}
-	return b
+	if hours > 0 {
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	}
+	return fmt.Sprintf("%dm", minutes)
 }
 
-// New render functions for the command center
-func (m model) renderViewTabs() string {
-	tabs := []string{"1:Overview", "2:Processes", "3:Network", "4:Alerts"}
-	activeIndex := 0
-	
-	switch m.viewMode {
-	case "overview": activeIndex = 0
-	case "processes": activeIndex = 1
-	case "network": activeIndex = 2
-	case "alerts": activeIndex = 3
-	}
-	
-	var tabStrs []string
-	for i, tab := range tabs {
-		if i == activeIndex {
-			tabStrs = append(tabStrs, lipgloss.NewStyle().
-				Foreground(darkBg).
-				Background(neonCyan).
-				Bold(true).
-				Padding(0, 1).
-				Render(tab))
-		} else {
-			tabStrs = append(tabStrs, lipgloss.NewStyle().
-				Foreground(neonCyan).
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(neonCyan).
-				Padding(0, 1).
-				Render(tab))
-		}
-	}
-	
-	return lipgloss.JoinHorizontal(lipgloss.Top, tabStrs...)
-}
+// min function is defined in system_monitor.go
 
-func (m model) renderOverviewDashboard() string {
-	// Create three-panel overview
-	leftPanel := m.renderSystemOverview()
-	centerPanel := m.renderNetworkOverview()
-	rightPanel := m.renderAlertsOverview()
-	
-	panelStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		Padding(1).
-		Height(m.height - 10)
-	
-	leftStyled := panelStyle.Copy().
-		BorderForeground(neonCyan).
-		Width(m.width/3 - 2).
-		Render(leftPanel)
-	
-	centerStyled := panelStyle.Copy().
-		BorderForeground(neonMagenta).
-		Width(m.width/3 - 2).
-		Render(centerPanel)
-	
-	rightStyled := panelStyle.Copy().
-		BorderForeground(neonYellow).
-		Width(m.width/3 - 2).
-		Render(rightPanel)
-	
-	return lipgloss.JoinHorizontal(lipgloss.Top, leftStyled, centerStyled, rightStyled)
-}
+// max function is defined in system_monitor.go
 
-func (m model) renderProcessView() string {
-	return m.renderSystemOverview() + "\n" + m.renderProcessList()
-}
+// Process management functions
+func (m *model) sortProcesses() {
+	if len(m.processes) == 0 {
+		return
+	}
 
-func (m model) renderNetworkView() string {
-	var s strings.Builder
-	
-	s.WriteString(lipgloss.NewStyle().
-		Foreground(neonCyan).
-		Bold(true).
-		Render("🌐 NETWORK CONNECTIONS\n\n"))
-	
-	// Network interfaces summary
-	for _, iface := range m.interfaces {
-		s.WriteString(fmt.Sprintf("Interface: %s\n", iface.Name))
-		s.WriteString(fmt.Sprintf("  In:  %s\n", formatBytes(iface.BytesIn)))
-		s.WriteString(fmt.Sprintf("  Out: %s\n\n", formatBytes(iface.BytesOut)))
-	}
-	
-	// Active connections
-	s.WriteString(lipgloss.NewStyle().
-		Foreground(neonMagenta).
-		Bold(true).
-		Render("ACTIVE CONNECTIONS:\n"))
-	
-	maxRows := m.height - 15
-	for i, conn := range m.connections {
-		if i >= maxRows {
-			break
-		}
-		
-		stateColor := neonGreen
-		if conn.State == "ESTABLISHED" {
-			stateColor = neonGreen
-		} else if conn.State == "LISTEN" {
-			stateColor = neonCyan
-		} else {
-			stateColor = neonYellow
-		}
-		
-		line := fmt.Sprintf("%-6s %s:%s -> %s:%s [%s]",
-			conn.Protocol, conn.LocalAddr, conn.LocalPort,
-			conn.RemoteAddr, conn.RemotePort, conn.State)
-		
-		s.WriteString(lipgloss.NewStyle().Foreground(stateColor).Render(line) + "\n")
-	}
-	
-	return s.String()
-}
-
-func (m model) renderAlertsView() string {
-	var s strings.Builder
-	
-	s.WriteString(lipgloss.NewStyle().
-		Foreground(neonRed).
-		Bold(true).
-		Render("🚨 SYSTEM ALERTS\n\n"))
-	
-	if len(m.alerts) == 0 {
-		s.WriteString(lipgloss.NewStyle().
-			Foreground(neonGreen).
-			Render("✓ All systems operational"))
-		return s.String()
-	}
-	
-	maxRows := m.height - 10
-	for i, alert := range m.alerts {
-		if i >= maxRows {
-			break
-		}
-		
-		var levelColor lipgloss.Color
-		switch alert.Level {
-		case "ERROR":
-			levelColor = neonRed
-		case "WARN":
-			levelColor = neonYellow
-		case "INFO":
-			levelColor = neonGreen
+	sort.Slice(m.processes, func(i, j int) bool {
+		var less bool
+		switch m.sortColumn {
+		case "CPU":
+			less = m.processes[i].CPU < m.processes[j].CPU
+		case "Memory":
+			less = m.processes[i].Memory < m.processes[j].Memory
+		case "PID":
+			less = m.processes[i].PID < m.processes[j].PID
 		default:
-			levelColor = neonCyan
+			less = m.processes[i].CPU < m.processes[j].CPU
 		}
-		
-		timestamp := alert.Timestamp.Format("15:04:05")
-		line := fmt.Sprintf("[%s] %s: %s (%s)",
-			timestamp, alert.Level, alert.Message, alert.Type)
-		
-		s.WriteString(lipgloss.NewStyle().Foreground(levelColor).Render(line) + "\n")
-	}
-	
-	return s.String()
+		if m.sortReverse {
+			less = !less
+		}
+		return less
+	})
 }
 
-func (m model) renderNetworkOverview() string {
-	var s strings.Builder
-	
-	s.WriteString(lipgloss.NewStyle().
-		Foreground(neonMagenta).
-		Bold(true).
-		Render("🌐 NETWORK STATUS\n\n"))
-	
-	// Traffic overview
-	if len(m.networkTraffic) > 0 {
-		traffic := m.networkTraffic[len(m.networkTraffic)-1]
-		s.WriteString(fmt.Sprintf("Total Traffic: %.2f MB/s\n", traffic))
+func filterProcesses(processes []Process, query string) []Process {
+	if query == "" {
+		return processes
 	}
-	
-	s.WriteString(fmt.Sprintf("Active Connections: %d\n", len(m.connections)))
-	s.WriteString(fmt.Sprintf("Network Interfaces: %d\n\n", len(m.interfaces)))
-	
-	// Network waves animation
-	s.WriteString("Network Activity:\n")
-	for i := 0; i < 8; i++ {
-		line := ""
-		for j := 0; j < 30; j++ {
-			char := "·"
-			for _, wave := range m.networkWaves {
-				if int(wave.x)%30 == j {
-					waveY := int(wave.y + wave.amplitude*math.Sin(wave.phase+float64(j)*wave.frequency))
-					if waveY%8 == i {
-						char = "~"
-						break
-					}
-				}
-			}
-			line += char
+
+	query = strings.ToLower(query)
+	var filtered []Process
+
+	for _, proc := range processes {
+		if strings.Contains(strings.ToLower(proc.Name), query) ||
+			strings.Contains(strings.ToLower(proc.Command), query) ||
+			strings.Contains(strings.ToLower(proc.User), query) ||
+			strings.Contains(fmt.Sprintf("%d", proc.PID), query) {
+			filtered = append(filtered, proc)
 		}
-		s.WriteString(lipgloss.NewStyle().
-			Foreground(neonCyan).
-			Render(line) + "\n")
 	}
-	
-	return s.String()
+
+	return filtered
 }
 
-func (m model) renderAlertsOverview() string {
-	var s strings.Builder
-	
-	s.WriteString(lipgloss.NewStyle().
-		Foreground(neonYellow).
-		Bold(true).
-		Render("⚠ RECENT ALERTS\n\n"))
-	
-	if len(m.alerts) == 0 {
-		s.WriteString(lipgloss.NewStyle().
-			Foreground(neonGreen).
-			Render("✓ No active alerts"))
-		return s.String()
-	}
-	
-	// Show last 10 alerts
-	maxAlerts := min(10, len(m.alerts))
-	for i := 0; i < maxAlerts; i++ {
-		alert := m.alerts[i]
-		
-		var levelColor lipgloss.Color
-		var icon string
-		switch alert.Level {
-		case "ERROR":
-			levelColor = neonRed
-			icon = "❌"
-		case "WARN":
-			levelColor = neonYellow
-			icon = "⚠"
-		case "INFO":
-			levelColor = neonGreen
-			icon = "ℹ"
-		default:
-			levelColor = neonCyan
-			icon = "·"
-		}
-		
-		time := alert.Timestamp.Format("15:04")
-		line := fmt.Sprintf("%s %s %s", icon, time, alert.Message)
-		if len(line) > 35 {
-			line = line[:32] + "..."
-		}
-		
-		s.WriteString(lipgloss.NewStyle().Foreground(levelColor).Render(line) + "\n")
-	}
-	
-	return s.String()
+func killProcess(pid int) error {
+	return syscall.Kill(pid, syscall.SIGTERM)
 }
 
-func (m model) renderMainControls() string {
-	controls := []string{}
-	
-	switch m.viewMode {
-	case "processes":
-		if m.searchMode {
-			controls = append(controls, 
-				lipgloss.NewStyle().Foreground(neonYellow).Render("SEARCH: "+m.searchQuery+"_"),
-				lipgloss.NewStyle().Foreground(neonCyan).Render("ESC: exit search"),
-			)
-		} else {
-			controls = append(controls,
-				lipgloss.NewStyle().Foreground(neonGreen).Render("↑/↓: navigate"),
-				lipgloss.NewStyle().Foreground(neonMagenta).Render("k: kill"),
-				lipgloss.NewStyle().Foreground(neonYellow).Render("/: search"),
-				lipgloss.NewStyle().Foreground(neonCyan).Render("c/m/p: sort"),
-			)
+// Data fetching functions (enhanced implementations)
+func getProcessesAndStats() ([]Process, SystemStats) {
+	var processes []Process
+	stats := SystemStats{
+		CPUCores: runtime.NumCPU(),
+		CPUUsage: make([]float64, runtime.NumCPU()),
+	}
+
+	// Get CPU usage per core
+	for i := 0; i < runtime.NumCPU(); i++ {
+		stats.CPUUsage[i] = rand.Float64() * 100
+	}
+
+	// Simulate memory stats
+	stats.MemTotal = 8 * 1024 * 1024 * 1024 // 8GB
+	stats.MemUsed = uint64(rand.Float64() * float64(stats.MemTotal) * 0.8)
+	stats.LoadAvg = [3]float64{rand.Float64() * 2, rand.Float64() * 2, rand.Float64() * 2}
+	stats.Uptime = time.Hour * 24 * time.Duration(rand.Intn(30))
+
+	// Get process list via ps
+	cmd := exec.Command("ps", "axo", "pid,user,pcpu,pmem,state,ppid,etime,command")
+	output, err := cmd.Output()
+	if err != nil {
+		return processes, stats
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for i, line := range lines {
+		if i == 0 || line == "" {
+			continue
 		}
-	default:
-		controls = append(controls,
-			lipgloss.NewStyle().Foreground(neonGreen).Render("TAB: switch view"),
-			lipgloss.NewStyle().Foreground(neonCyan).Render("1-4: quick switch"),
-		)
+
+		fields := strings.Fields(line)
+		if len(fields) < 8 {
+			continue
+		}
+
+		pid, _ := strconv.Atoi(fields[0])
+		cpu, _ := strconv.ParseFloat(fields[2], 64)
+		mem, _ := strconv.ParseFloat(fields[3], 64)
+		ppid, _ := strconv.Atoi(fields[5])
+
+		command := strings.Join(fields[7:], " ")
+		name := fields[7]
+		if strings.Contains(name, "/") {
+			parts := strings.Split(name, "/")
+			name = parts[len(parts)-1]
+		}
+
+		processes = append(processes, Process{
+			PID:       pid,
+			Name:      name,
+			User:      fields[1],
+			CPU:       cpu,
+			Memory:    mem,
+			State:     fields[4],
+			PPID:      ppid,
+			StartTime: fields[6],
+			Command:   command,
+		})
 	}
-	
-	controls = append(controls, lipgloss.NewStyle().Foreground(neonRed).Render("q: quit"))
-	
-	return "\n" + lipgloss.NewStyle().
-		Background(darkBg).
-		Padding(0, 1).
-		Width(m.width).
-		Render(strings.Join(controls, " | "))
+
+	return processes, stats
 }
 
-func renderBar(value, max float64, width int, colorLow, colorHigh lipgloss.Color) string {
-	filled := int((value / max) * float64(width))
-	if filled > width {
-		filled = width
+func getNetworkConnections() []NetworkConnection {
+	var connections []NetworkConnection
+
+	// Simulate some connections
+	protocols := []string{"TCP", "UDP"}
+	states := []string{"ESTABLISHED", "LISTEN", "TIME_WAIT", "CLOSE_WAIT"}
+
+	for i := 0; i < 15; i++ {
+		conn := NetworkConnection{
+			Protocol:    protocols[rand.Intn(len(protocols))],
+			LocalAddr:   fmt.Sprintf("192.168.1.%d", rand.Intn(254)+1),
+			LocalPort:   fmt.Sprintf("%d", rand.Intn(65535)+1),
+			RemoteAddr:  fmt.Sprintf("%d.%d.%d.%d", rand.Intn(255), rand.Intn(255), rand.Intn(255), rand.Intn(255)),
+			RemotePort:  fmt.Sprintf("%d", rand.Intn(65535)+1),
+			State:       states[rand.Intn(len(states))],
+			PID:         rand.Intn(30000) + 1000,
+			ProcessName: []string{"chrome", "ssh", "node", "python", "go", "nginx"}[rand.Intn(6)],
+		}
+		connections = append(connections, conn)
 	}
-	
-	bar := strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
-	
-	color := colorLow
-	if value/max > 0.7 {
-		color = colorHigh
-	}
-	
-	return lipgloss.NewStyle().Foreground(color).Render(bar)
+
+	return connections
 }
 
+func getNetworkInterfaces() []NetworkInterface {
+	interfaces := []NetworkInterface{
+		{
+			Name:       "en0",
+			BytesIn:    uint64(rand.Intn(1000000000)),
+			BytesOut:   uint64(rand.Intn(1000000000)),
+			PacketsIn:  uint64(rand.Intn(1000000)),
+			PacketsOut: uint64(rand.Intn(1000000)),
+			Speed:      1000000000, // 1 Gbps
+		},
+		{
+			Name:       "lo0",
+			BytesIn:    uint64(rand.Intn(100000000)),
+			BytesOut:   uint64(rand.Intn(100000000)),
+			PacketsIn:  uint64(rand.Intn(100000)),
+			PacketsOut: uint64(rand.Intn(100000)),
+			Speed:      0,
+		},
+	}
 
+	return interfaces
+}
+
+func getSystemAlerts() []SystemAlert {
+	var alerts []SystemAlert
+
+	// Simulate some alerts
+	alertTypes := []AlertType{AlertTypeCPU, AlertTypeMemory, AlertTypeDisk, AlertTypeNetwork, AlertTypeProcess}
+	levels := []AlertLevel{AlertLevelInfo, AlertLevelWarning, AlertLevelError}
+	messages := []string{
+		"High CPU usage detected",
+		"Memory usage above threshold",
+		"Disk space running low",
+		"Network connection timeout",
+		"Process crashed unexpectedly",
+		"Temperature warning",
+		"Load average high",
+	}
+
+	for i := 0; i < rand.Intn(5); i++ {
+		alert := SystemAlert{
+			Type:      alertTypes[rand.Intn(len(alertTypes))],
+			Level:     levels[rand.Intn(len(levels))],
+			Message:   messages[rand.Intn(len(messages))],
+			Timestamp: time.Now().Add(-time.Duration(rand.Intn(3600)) * time.Second),
+			Source:    "system-monitor",
+		}
+		alerts = append(alerts, alert)
+	}
+
+	return alerts
+}
 
 func main() {
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
